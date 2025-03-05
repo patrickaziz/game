@@ -1,11 +1,9 @@
-html
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Science Quest: STAAR Galaxy - Density Dash</title>
+    <title>Science Quest: STAAR Galaxy</title>
     <style>
         body {
             margin: 0;
@@ -17,179 +15,188 @@ html
             height: 100vh;
             font-family: Arial, sans-serif;
         }
-        #gameCanvas {
+        canvas {
             border: 2px solid #fff;
-            background: #16213e;
         }
-        #quiz {
+        #ui {
             position: absolute;
             top: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            display: none;
-        }
-        #score {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             color: white;
             font-size: 20px;
         }
+        #quiz {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            display: none;
+            text-align: center;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">Zone: <span id="zone">1</span> | Score: <span id="score">0</span></div>
     <div id="quiz">
         <p id="question"></p>
         <button onclick="checkAnswer('yes')">Yes</button>
         <button onclick="checkAnswer('no')">No</button>
     </div>
-    <div id="score">Score: 0</div>
 
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const quiz = document.getElementById('quiz');
-        const question = document.getElementById('question');
-        const scoreDisplay = document.getElementById('score');
+        let player, objects, platforms, goal, zones, currentZone, score, quizActive;
+        let GRAVITY = 0.8;
 
-        // Game variables
-        let player = { x: 50, y: 500, width: 40, height: 40, speed: 5, vy: 0, jumping: false };
-        let objects = [
-            { x: 200, y: 500, width: 30, height: 30, type: 'feather', sinks: false },
-            { x: 300, y: 500, width: 30, height: 30, type: 'rock', sinks: true },
-            { x: 400, y: 500, width: 30, height: 30, type: 'wood', sinks: false }
-        ];
-        let platforms = [
-            { x: 0, y: 540, width: 800, height: 60 },
-            { x: 600, y: 400, width: 200, height: 20 }
-        ];
-        let goal = { x: 700, y: 360, width: 40, height: 40 };
-        let score = 0;
-        let gameOver = false;
-        let keys = {};
+        function setup() {
+            createCanvas(800, 600);
+            resetZone(0);
+            score = 0;
+            zones = [
+                { name: 'Matter Matrix', question: 'Does a rock have greater density than a feather?', answer: 'yes', bg: '#16213e' },
+                { name: 'Force Field Frontier', question: 'Does a conductor allow electricity to flow?', answer: 'yes', bg: '#0f3460' },
+                { name: 'Eco-Sphere', question: 'Is a producer an organism that makes its own food?', answer: 'yes', bg: '#2a9d8f' },
+                { name: 'Earthscape', question: 'Does erosion move sediment from one place to another?', answer: 'yes', bg: '#e9c46a' },
+                { name: 'Lab Nebula', question: 'Is a hypothesis a testable prediction?', answer: 'yes', bg: '#264653' }
+            ];
+            currentZone = 0;
+            quizActive = false;
+        }
 
-        // Event listeners for keyboard
-        window.addEventListener('keydown', (e) => keys[e.key] = true);
-        window.addEventListener('keyup', (e) => keys[e.key] = false);
+        function resetZone(zoneIndex) {
+            player = { x: 50, y: 500, r: 20, speed: 5, vy: 0, jumping: false };
+            objects = [
+                { x: 200, y: 500, r: 15, type: zoneIndex === 0 ? 'feather' : zoneIndex === 1 ? 'insulator' : zoneIndex === 2 ? 'consumer' : zoneIndex === 3 ? 'rock' : 'data', action: 'float' },
+                { x: 300, y: 500, r: 15, type: zoneIndex === 0 ? 'rock' : zoneIndex === 1 ? 'conductor' : zoneIndex === 2 ? 'producer' : zoneIndex === 3 ? 'sand' : 'hypothesis', action: 'sink' }
+            ];
+            platforms = [
+                { x: 0, y: 540, w: 800, h: 60 },
+                { x: 600, y: 400, w: 200, h: 20 }
+            ];
+            goal = { x: 700, y: 360, r: 20 };
+            updateUI();
+        }
 
-        // Game loop
-        function update() {
-            if (gameOver) return;
+        function draw() {
+            background(zones[currentZone].bg);
 
+            // Draw platforms with gradient
+            for (let p of platforms) {
+                fill(gradientColor(100, 150, 200));
+                rect(p.x, p.y, p.w, p.h, 10);
+            }
+
+            // Draw player with animation
+            fill(gradientColor(233, 69, 96));
+            ellipse(player.x, player.y, player.r * 2);
+            if (frameCount % 20 < 10) ellipse(player.x - 5, player.y - 5, 5); // Blinking eye
+
+            // Draw objects with labels
+            for (let i = objects.length - 1; i >= 0; i--) {
+                let obj = objects[i];
+                fill(obj.action === 'sink' ? '#53354a' : '#f7d794');
+                ellipse(obj.x, obj.y, obj.r * 2);
+                fill(255);
+                textSize(12);
+                text(obj.type, obj.x - 20, obj.y - 20);
+                if (obj.y > height || obj.y < 0) objects.splice(i, 1);
+            }
+
+            // Draw goal with glow
+            fill(gradientColor(0, 255, 0));
+            ellipse(goal.x, goal.y, goal.r * 2);
+            noFill();
+            stroke(255, 100);
+            strokeWeight(2);
+            ellipse(goal.x, goal.y, goal.r * 2.5);
+
+            if (!quizActive) updateGame();
+        }
+
+        function updateGame() {
             // Player movement
-            if (keys['ArrowLeft']) player.x -= player.speed;
-            if (keys['ArrowRight']) player.x += player.speed;
-            if (keys['ArrowUp'] && !player.jumping) {
+            if (keyIsDown(LEFT_ARROW)) player.x -= player.speed;
+            if (keyIsDown(RIGHT_ARROW)) player.x += player.speed;
+            if (keyIsDown(UP_ARROW) && !player.jumping) {
                 player.vy = -15;
                 player.jumping = true;
             }
-            if (keys[' ']) interact();
 
             // Gravity and collision
-            player.vy += 0.8; // Gravity
+            player.vy += GRAVITY;
             player.y += player.vy;
-            for (let platform of platforms) {
-                if (player.x + player.width > platform.x && player.x < platform.x + platform.width &&
-                    player.y + player.height > platform.y && player.y + player.height - player.vy <= platform.y) {
-                    player.y = platform.y - player.height;
+            for (let p of platforms) {
+                if (player.x > p.x && player.x < p.x + p.w && player.y + player.r > p.y && player.y + player.r - player.vy <= p.y) {
+                    player.y = p.y - player.r;
                     player.vy = 0;
                     player.jumping = false;
                 }
             }
-            if (player.y > canvas.height - player.height) {
-                player.y = canvas.height - player.height;
+            if (player.y > height - player.r) {
+                player.y = height - player.r;
                 player.vy = 0;
                 player.jumping = false;
             }
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            player.x = constrain(player.x, player.r, width - player.r);
 
-            // Check goal
-            if (player.x + player.width > goal.x && player.x < goal.x + goal.width &&
-                player.y + player.height > goal.y && player.y < goal.y + goal.height) {
-                showQuiz();
-            }
-
-            draw();
-            requestAnimationFrame(update);
-        }
-
-        // Interaction with objects
-        function interact() {
-            for (let i = objects.length - 1; i >= 0; i--) {
-                let obj = objects[i];
-                if (Math.abs(player.x - obj.x) < 50 && Math.abs(player.y - obj.y) < 50) {
-                    if (obj.sinks) {
-                        obj.y += 5; // Sink
-                        if (obj.y > canvas.height) {
+            // Interact with objects
+            if (keyIsDown(32)) { // Spacebar
+                for (let i = objects.length - 1; i >= 0; i--) {
+                    let obj = objects[i];
+                    if (dist(player.x, player.y, obj.x, obj.y) < 50) {
+                        obj.y += obj.action === 'sink' ? 5 : -5;
+                        if (obj.y > height || obj.y < 0) {
                             objects.splice(i, 1);
                             score += 10;
-                        }
-                    } else {
-                        obj.y -= 5; // Float
-                        if (obj.y < 0) {
-                            objects.splice(i, 1);
-                            score += 10;
+                            updateUI();
                         }
                     }
                 }
             }
-            scoreDisplay.textContent = `Score: ${score}`;
+
+            // Check goal
+            if (dist(player.x, player.y, goal.x, goal.y) < player.r + goal.r) {
+                showQuiz();
+            }
         }
 
-        // Drawing the game
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw platforms
-            ctx.fillStyle = '#0f3460';
-            for (let platform of platforms) {
-                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-            }
-
-            // Draw player
-            ctx.fillStyle = '#e94560';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-
-            // Draw objects
-            for (let obj of objects) {
-                ctx.fillStyle = obj.sinks ? '#53354a' : '#f7d794';
-                ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-                ctx.fillStyle = 'white';
-                ctx.font = '12px Arial';
-                ctx.fillText(obj.type, obj.x, obj.y - 5);
-            }
-
-            // Draw goal
-            ctx.fillStyle = '#00ff00';
-            ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+        function gradientColor(r, g, b) {
+            return color(r, g, b, 200 + sin(frameCount * 0.05) * 55);
         }
 
-        // Quiz functionality
         function showQuiz() {
-            quiz.style.display = 'block';
-            question.textContent = 'Does a rock have greater density than a feather?';
-            gameOver = true;
+            quizActive = true;
+            document.getElementById('quiz').style.display = 'block';
+            document.getElementById('question').textContent = zones[currentZone].question;
         }
 
-        function checkAnswer(answer) {
-            if (answer === 'yes') {
+        window.checkAnswer = function(answer) {
+            if (answer === zones[currentZone].answer) {
                 score += 20;
-                alert('Correct! Rocks sink because they have higher density.');
+                alert('Correct! +20 points');
             } else {
-                alert('Oops! Rocks have greater density than feathers and sink.');
+                alert('Oops! Try again next time.');
             }
-            scoreDisplay.textContent = `Score: ${score}`;
-            quiz.style.display = 'none';
-            alert(`Game Over! Final Score: ${score}`);
-        }
+            document.getElementById('quiz').style.display = 'none';
+            quizActive = false;
+            currentZone++;
+            if (currentZone < zones.length) {
+                resetZone(currentZone);
+            } else {
+                alert(`Game Over! Final Score: ${score}`);
+                currentZone = 0;
+                score = 0;
+                resetZone(0);
+            }
+            updateUI();
+        };
 
-        // Start the game
-        update();
+        function updateUI() {
+            document.getElementById('zone').textContent = currentZone + 1;
+            document.getElementById('score').textContent = score;
+        }
     </script>
 </body>
 </html>
-
